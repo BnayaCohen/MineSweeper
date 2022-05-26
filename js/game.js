@@ -17,39 +17,74 @@ var gBoard
 var gGame
 // Array of the difficulties
 var gLevel = [
-    { SIZE: 4, MINES: 2 },
-    { SIZE: 8, MINES: 12 },
-    { SIZE: 12, MINES: 30 },
+    { ID: 'Explorer', SIZE: 4, MINES: 2 },
+    { ID: 'Normal', SIZE: 8, MINES: 12 },
+    { ID: 'Hell Mode', SIZE: 12, MINES: 30 },
 ]
 
 var gCurrGameLevel
 var gTimerInterval
 var gFirstClick
 var gStartingLives
+var gManualMode
+var gManualCreateCount
+var gGameMoves
+var gMovesCount
+var gWasMove
 
 
+// reset all the variables
 function initGame(gameLevel) {
-    // reset all the variables
     clearInterval(gTimerInterval)
-    if (gameLevel >= 0) gCurrGameLevel = gLevel[gameLevel]// in case that the its not by the click from the smiley
+    // in case that the its not by the click from the smiley
+    if (gameLevel >= 0) gCurrGameLevel = gLevel[gameLevel]
 
     gStartingLives = gCurrGameLevel.MINES < 3 ? gCurrGameLevel.MINES : 3
     gGame = {
         isOn: true,
+        isBoardFilled: false,
         lives: gStartingLives,
         hints: 3,
         hintMode: false,
+        safeClicks: 3,
         shownCount: 0,
         markedCount: 0,
         secsPassed: 0
     }
-    var elSpan = document.querySelector('.timer')
-    elSpan.innerText = gGame.secsPassed
-    elSpan = document.querySelector('.lives')
-    elSpan.innerText = LIFE.repeat(gGame.lives)
+    var elTimer = document.querySelector('.timer')
+    elTimer.innerText = gGame.secsPassed
+
+    var elLives = document.querySelector('.lives')
+    elLives.innerText = LIFE.repeat(gGame.lives)
+
     var elSmiley = document.querySelector('.smiley')
     elSmiley.innerText = NORMAL
+
+    var elHint = document.querySelector('.hints')
+    elHint.innerText = HINT.repeat(gGame.hints)
+
+    var elBestScore = document.querySelector('.best-score')
+    var currScore = getScore(gCurrGameLevel) ? getScore(gCurrGameLevel) : '?'
+    elBestScore.innerText = 'Best Score In ' + gCurrGameLevel.ID + ' is- '+currScore
+
+    var elSafeClick = document.querySelector('.safe-click')
+    elSafeClick.innerText = gGame.safeClicks
+
+    var elManualCreate = document.querySelector('.manual-create')
+    elManualCreate.innerText = gCurrGameLevel.MINES
+    var elBtnManualCreate = document.querySelector('.manual-create-button')
+    elBtnManualCreate.style.backgroundColor = "#595041"
+
+    var elBtnSevenBoom = document.querySelector('.seven-boom')
+    elBtnSevenBoom.style.backgroundColor = "#595041"
+
     gFirstClick = true
+    gManualMode = false
+    gGameMoves = []
+    gGameMoves.push([])
+    gMovesCount = 0
+    gWasMove = false
+
     // Build an empty board
     gBoard = buildBoard()
     renderBoard(gBoard)
@@ -57,9 +92,27 @@ function initGame(gameLevel) {
 
 // fills the game board and starts the timer
 function startGame(firstCellLocation) {
-    fillBoard(firstCellLocation)
-    gFirstClick = false
-    startTimer()
+    if (!gManualMode) {
+
+        if (!gGame.isBoardFilled) fillBoard(firstCellLocation)
+        gFirstClick = false
+        startTimer()
+    }
+}
+
+// Updates the board with the mines and hide all the bombs from the DOM
+function fillManualBoard() {
+    // Hide the placed bombs
+    for (var i = 0; i < gBoard.length; i++) {
+        for (var j = 0; j < gBoard.length; j++) {
+            var elCell = document.querySelector(`.cell-${i}-${j}`)
+            elCell.innerText = ''
+        }
+    }
+
+    // Updates the neighbors count around every mine
+    setMinesNegsCount(gBoard)
+    gGame.isBoardFilled = true
 }
 
 // Builds empty board
@@ -96,9 +149,10 @@ function fillBoard(cellLocation) {
     }
     // Updates the neighbors count around every mine
     setMinesNegsCount(gBoard)
+    gGame.isBoardFilled = true
 }
 
-// the first click on the board needs to be outside the 1st degree cells
+// the first click on the board needs to be without mines on the 1st degree cells
 function isValidCellForMineAtFirstTime(cellLocation, mineLocation) {
     return !((cellLocation.i - 1 <= mineLocation.i && mineLocation.i <= cellLocation.i + 1)
         && (cellLocation.j - 1 <= mineLocation.j && mineLocation.j <= cellLocation.j + 1))
@@ -134,12 +188,9 @@ function renderBoard(board) {
     for (var i = 0; i < board.length; i++) {
         strHTML += '<tr>'
         for (var j = 0; j < board[i].length; j++) {
-            if (board[i][j].isMine) var cell = MINE
-            else var cell = board[i][j].minesAroundCount ? board[i][j].minesAroundCount : ' '
-            cell = '' ////////////
-            var className = 'cell cell-' + i + '-' + j
+            var className = 'cell cell-' + i + '-' + j + ' not-shown'
             var clickFunction = 'onmousedown="(mouseClicked(event,this, ' + i + ', ' + j + '))" '
-            strHTML += '<td ' + clickFunction + 'class="' + className + '"> ' + cell + ' </td>'
+            strHTML += '<td ' + clickFunction + 'class="' + className + '"></td>'
         }
         strHTML += '</tr>'
     }
@@ -162,25 +213,50 @@ function mouseClicked(e, elCell, i, j) {
 
 // Left click on the mouse
 function cellClicked(elCell, i, j) {
+
     if (gFirstClick) startGame({ i, j })
 
     var currCell = gBoard[i][j]
 
-    if (!currCell.isMarked && !currCell.isShown) {
-        if (gGame.hintMode) {
-            revealHint({ i, j })
-        } else {
-            currCell.isShown = true
-            gGame.shownCount++
-            elCell.classList.add('shown')
-
-            var cellValue = currCell.minesAroundCount ? currCell.minesAroundCount : ''
-            elCell.innerText = currCell.isMine ? MINE_EXPLODE : cellValue
-            if (!cellValue) expandShown(i, j)// expend if the cell value is empty - 0
-
-            checkGameOver(currCell.isMine)
+    if (gManualMode) {
+        if (!currCell.isMine) {
+            // Update the model
+            gManualCreateCount--
+            currCell.isMine = true
+            // Update the DOM
+            elCell.innerText = MINE
+            var elManualCreate = document.querySelector('.manual-create')
+            elManualCreate.innerText = gManualCreateCount
         }
+        if (gManualCreateCount === 0) {
+            fillManualBoard()
+            gManualMode = false
+            elManualCreate.innerText = 'Start!'
+        }
+    } else if (gGame.hintMode) {
+        revealHint({ i, j })
+    } else {
+        if (revealedCellIsEmpty({ i, j })) expandShown(i, j)// expend if the cell value is empty - 0
+        // Handle if its a case of mine
+        if (currCell.isMine) {
+            elCell.innerText = MINE_EXPLODE
+            currCell.isShown = true
+            gGameMoves[gMovesCount].push([currCell, { i, j }])
+            gWasMove = true
+            //DOM
+            elCell.classList.add('shown')
+            elCell.classList.remove('not-shown')
+        }
+        // UPdate the moves array
+        if (gWasMove) {
+            gMovesCount++
+            gGameMoves.push([])
+            gWasMove = false
+        }
+        console.log(gGameMoves);
+        checkGameOver(currCell.isMine)
     }
+
 }
 
 // Right click on the mouse
@@ -198,48 +274,6 @@ function cellMarked(elCell, i, j) {
 
         checkGameOver()
     }
-}
-
-// Consume hint
-function useHint() {
-    if (!gGame.hintMode && gGame.hints > 0) {
-        gGame.hints--
-        gGame.hintMode = true
-        var elHint = document.querySelector('.hints')
-        elHint.innerText = HINT.repeat(gGame.hints)
-    }
-}
-
-//reveal all the neighbors of the current cell
-function revealHint(cellLocation) {
-    var revealedCells = []
-
-    for (var i = cellLocation.i - 1; i <= cellLocation.i + 1; i++) {
-        if (i < 0 || i >= gBoard.length) continue
-
-        for (var j = cellLocation.j - 1; j <= cellLocation.j + 1; j++) {
-            if (j < 0 || j >= gBoard[i].length) continue
-
-            if (!gBoard[i][j].isShown) {
-                revealedCells.push([gBoard[i][j], i, j])
-                var elCell = document.querySelector(`.cell-${i}-${j}`)
-                elCell.classList.add('shown')
-                var cellValue = gBoard[i][j].minesAroundCount ? gBoard[i][j].minesAroundCount : ''
-                if (gBoard[i][j].isMine) cellValue = MINE
-                elCell.innerText = cellValue
-            }
-        }
-    }
-    setTimeout(() => {
-        for (var i = 0; i < revealedCells.length; i++) {
-            if (!revealedCells[i][0].isShown) {
-                var elCell = document.querySelector(`.cell-${revealedCells[i][1]}-${revealedCells[i][2]}`)
-                elCell.classList.remove('shown')
-                elCell.innerText = revealedCells[i][0].isMarked ? MARK_MINE : ''
-            }
-        }
-        gGame.hintMode = false
-    }, 1000)
 }
 
 // Checks if the game is over if he win of he lost all his lives by bombs
@@ -271,35 +305,60 @@ function checkGameOver(mineClicked = false) {
         // in case that he didnt clicked the mine check if he win
 
         var shownCellsNeeded = gCurrGameLevel.SIZE * gCurrGameLevel.SIZE - gCurrGameLevel.MINES
-        if (gGame.shownCount - gStartingLives + gGame.lives === shownCellsNeeded) {
+        if (gGame.shownCount === shownCellsNeeded) {//- gStartingLives + gGame.lives 
             gGame.isOn = false
             var elSmiley = document.querySelector('.smiley')
             elSmiley.innerText = WIN
+            updateScore(gCurrGameLevel, gGame.secsPassed)
         }
     }
 
     if (!gGame.isOn) clearInterval(gTimerInterval)
 }
 
-// shows the 1st degree neighbors of the current index of the board
-function expandShown(rowIdx, colIdx) {
-    for (var i = rowIdx - 1; i <= rowIdx + 1; i++) {
-        if (i < 0 || i >= gBoard.length) continue
+//reavel the cell and return if it was empty // Not exclusive for mines and marked cells
+function revealedCellIsEmpty(location) {
+    var isEmpty = false
 
-        for (var j = colIdx - 1; j <= colIdx + 1; j++) {
-            if (j < 0 || j >= gBoard[i].length) continue
-            if (i === rowIdx && j === colIdx) continue
-
-            var currCell = gBoard[i][j]
-            if (!currCell.isMarked && !currCell.isMine) {
-                var elCell = document.querySelector(`.cell-${i}-${j}`)
-                elCell.classList.add('shown')
-                elCell.innerText = currCell.minesAroundCount ? currCell.minesAroundCount : ''
-                if (!currCell.isShown) gGame.shownCount++
-                currCell.isShown = true
-                console.log(gGame.shownCount);
-            }
+    var currCell = gBoard[location.i][location.j]
+    if (!currCell.isMarked && !currCell.isMine) {
+        // MODEL
+        if (!currCell.isShown) gGame.shownCount++
+        currCell.isShown = true
+        //DOM
+        var elCell = document.querySelector(`.cell-${location.i}-${location.j}`)
+        elCell.classList.add('shown')
+        elCell.classList.remove('not-shown')
+        var minesCount = currCell.minesAroundCount
+        if (minesCount) elCell.innerText = minesCount
+        else {
+            elCell.innerText = ''
+            isEmpty = true
         }
+        // Add the cell to moves array for the 'undo' function
+        gGameMoves[gMovesCount].push([currCell, location])
+        gWasMove = true
+    }
+
+    return isEmpty
+}
+
+// Recursion function to expend all the empty cells
+function expandShown(rowIdx, colIdx) {
+    var i = rowIdx ? rowIdx - 1 : 0
+    while (i <= rowIdx + 1) {
+        if (i === gBoard.length) break
+
+        var j = colIdx ? colIdx - 1 : 0
+        while (j <= colIdx + 1) {
+            if (j === gBoard[0].length) break
+
+            if (!gBoard[i][j].isShown) {
+                if (revealedCellIsEmpty({ i, j })) expandShown(i, j)
+            }
+            j++
+        }
+        i++
     }
 }
 
@@ -312,4 +371,13 @@ function startTimer() {
         elSpan.innerText = gGame.secsPassed
 
     }, 100)
+}
+
+// Using the local storage
+function updateScore(level, score) {
+    if (localStorage.getItem(level.ID) < score)
+        localStorage.setItem(level.ID, score)
+}
+function getScore(level) {
+    return localStorage.getItem(level.ID)
 }
