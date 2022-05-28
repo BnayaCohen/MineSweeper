@@ -1,9 +1,35 @@
 // Start the option of the manual create
 function manualCreate(elBtn) {
-    initGame(-1)
-    gManualMode = true
-    gManualCreateCount = gCurrGameLevel.MINES
-    elBtn.style.backgroundColor = "#71a0d6"
+    if (!gManualMode) {
+        initGame(-1)
+        gManualMode = true
+        elBtn.style.backgroundColor = "#71a0d6"
+        elBtn.innerText = '-Finish Create-'
+    } else if (gManualCreateCount > 0 && !gGame.isBoardFilled) {
+        fillManualBoard()
+        gCurrGameLevel.MINES = gManualCreateCount
+        gManualMode = false
+        gStartingLives = gCurrGameLevel.MINES < 3 ? gCurrGameLevel.MINES : 3
+        gGame.lives = gStartingLives
+        var elLives = document.querySelector('.lives')
+        elLives.innerText = LIFE.repeat(gGame.lives)
+        elBtn.innerText = 'Play!'
+    }
+}
+
+// Updates the board with the mines and hide all the bombs from the DOM
+function fillManualBoard() {
+    // Hide the placed bombs
+    for (var i = 0; i < gBoard.length; i++) {
+        for (var j = 0; j < gBoard.length; j++) {
+            var elCell = document.querySelector(`.cell-${i}-${j}`)
+            elCell.innerText = ''
+        }
+    }
+
+    // Updates the neighbors count around every mine
+    setMinesNegsCount(gBoard)
+    gGame.isBoardFilled = true
 }
 
 function undo() {
@@ -71,10 +97,17 @@ function fillBoardSevenBoom() {
 // Consume hint
 function useHint() {
     if (!gGame.hintMode && gGame.hints > 0 && gGame.isOn && !gManualMode) {
+        HINT_AUDIO.play()
         gGame.hints--
         gGame.hintMode = true
         var elHint = document.querySelector('.hints')
         elHint.innerText = HINT.repeat(gGame.hints)
+        // Show animation
+        var elHintAnimation = document.getElementById('hint-mode-container')
+        elHintAnimation.style.display = 'flex'
+        elHintAnimation.style.animation = "show-hint 1.5s cubic-bezier(0, 0, 0.04, 0.99)";
+        setTimeout(() => { elHintAnimation.style.display = 'none' }, 1500)
+
     }
 }
 

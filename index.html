@@ -12,30 +12,34 @@
 
 <body onload="initGame(0)">
     <h1>💥The MineSweeper💥</h1>
+    <div class="options-container">
+        <div class="functions-container">
+            <h2  class="options-title">-Game Details-</h2>
+            <h2>Time: <span class="timer">0</span></h2>
+            <p class="lives">💖💖💖</p>
 
-    <div>
-        <button onclick="initGame(0)">Explorer</button>
-        <button onclick="initGame(1)">Normal</button>
-        <button onclick="initGame(2)">Hell Mode</button>
-        <br><br>
-        <button class="manual-create-button" onclick="manualCreate(this)">Manual Create (<span
-                class="manual-create">2</span>)</button>
-        <button class="seven-boom" onclick="sevenBoom(this)">7 BOOM</button>
+            <p class="hints" onclick="useHint()">💡💡💡</p>
+            <button onclick="safeClick()">Safe Click<br>(<span class="safe-click">3</span> available)</button>
+            <button onclick="undo()">Undo</button>
+        </div>
+        <div class="functions-container">
+            <h2 class="options-title">-Game Modes-</h2>
+            <button onclick="initGame(0)">Explorer</button>
+            <button onclick="initGame(1)">Normal</button>
+            <button onclick="initGame(2)">Hell Mode</button>
+            <br>
+            <button class="manual-create" onclick="manualCreate(this)">Manual Create</button>
+            <button class="seven-boom" onclick="sevenBoom(this)">7 BOOM</button>
+        </div>
     </div>
 
-    <h2>Time: <span class="timer">0</span></h2>
-    <p class="lives">💖💖💖</p>
-
-    <p style="cursor:pointer;" onclick="useHint()" style="font-size: 25px;" class="hints">💡💡💡</p>
-    <button onclick="safeClick()">Safe Click<br>(<span class="safe-click">3</span> available)</button>
-    <button onclick="undo()">Undo</button>
+    <div id="hint-mode-container">💡</div>
 
     <div class="game-container">
         <h3 onclick="initGame(-1)" class="smiley">🙂</h3>
         <span class="board-container"></span>
         <h4 class="best-score"></h4>
     </div>
-
 
     <footer>
         <p>Created By Bnaya</p>

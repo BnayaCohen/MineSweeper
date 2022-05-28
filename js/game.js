@@ -10,6 +10,7 @@ const DEAD = '💩'
 const WIN = '🤑'
 const HINT = '💡'
 const EXPLODE_AUDIO = new Audio('snd/Explode.aac')
+const HINT_AUDIO = new Audio('snd/Hint.aac')
 
 // A Matrix containing cell objects
 var gBoard
@@ -65,21 +66,21 @@ function initGame(gameLevel) {
 
     var elBestScore = document.querySelector('.best-score')
     var currScore = getScore(gCurrGameLevel) ? getScore(gCurrGameLevel) : '?'
-    elBestScore.innerText = 'Best Score In ' + gCurrGameLevel.ID + ' is- '+currScore
+    elBestScore.innerText = 'Best Score In ' + gCurrGameLevel.ID + ' is- ' + currScore
 
     var elSafeClick = document.querySelector('.safe-click')
     elSafeClick.innerText = gGame.safeClicks
 
-    var elManualCreate = document.querySelector('.manual-create')
-    elManualCreate.innerText = gCurrGameLevel.MINES
-    var elBtnManualCreate = document.querySelector('.manual-create-button')
+    var elBtnManualCreate = document.querySelector('.manual-create')
     elBtnManualCreate.style.backgroundColor = "#595041"
+    elBtnManualCreate.innerText = 'Manual Create'
 
     var elBtnSevenBoom = document.querySelector('.seven-boom')
     elBtnSevenBoom.style.backgroundColor = "#595041"
 
     gFirstClick = true
     gManualMode = false
+    gManualCreateCount = 0
     gGameMoves = []
     gGameMoves.push([])
     gMovesCount = 0
@@ -93,26 +94,10 @@ function initGame(gameLevel) {
 // fills the game board and starts the timer
 function startGame(firstCellLocation) {
     if (!gManualMode) {
-
         if (!gGame.isBoardFilled) fillBoard(firstCellLocation)
         gFirstClick = false
         startTimer()
     }
-}
-
-// Updates the board with the mines and hide all the bombs from the DOM
-function fillManualBoard() {
-    // Hide the placed bombs
-    for (var i = 0; i < gBoard.length; i++) {
-        for (var j = 0; j < gBoard.length; j++) {
-            var elCell = document.querySelector(`.cell-${i}-${j}`)
-            elCell.innerText = ''
-        }
-    }
-
-    // Updates the neighbors count around every mine
-    setMinesNegsCount(gBoard)
-    gGame.isBoardFilled = true
 }
 
 // Builds empty board
@@ -221,21 +206,14 @@ function cellClicked(elCell, i, j) {
     if (gManualMode) {
         if (!currCell.isMine) {
             // Update the model
-            gManualCreateCount--
+            gManualCreateCount++
             currCell.isMine = true
             // Update the DOM
             elCell.innerText = MINE
-            var elManualCreate = document.querySelector('.manual-create')
-            elManualCreate.innerText = gManualCreateCount
-        }
-        if (gManualCreateCount === 0) {
-            fillManualBoard()
-            gManualMode = false
-            elManualCreate.innerText = 'Start!'
         }
     } else if (gGame.hintMode) {
         revealHint({ i, j })
-    } else {
+    } else if(!currCell.isShown) {
         if (revealedCellIsEmpty({ i, j })) expandShown(i, j)// expend if the cell value is empty - 0
         // Handle if its a case of mine
         if (currCell.isMine) {
@@ -282,23 +260,24 @@ function checkGameOver(mineClicked = false) {
     // Remove 1 life or end the give if he dont have lives left
     if (mineClicked) {
         EXPLODE_AUDIO.play()
+        var elSpan = document.querySelector('.lives')
         if (gGame.lives === 1) {
             for (var i = 0; i < gBoard.length; i++) {
                 for (var j = 0; j < gBoard[i].length; j++) {
                     if (gBoard[i][j].isMine && !gBoard[i][j].isShown) {
                         var elCell = document.querySelector(`.cell-${i}-${j}`)
                         elCell.innerText = MINE
-                        elCell.classList.add('bomb-reveal')
+                        elCell.classList.add('mine-reveal')
                     }
                 }
             }
             var elSmiley = document.querySelector('.smiley')
             elSmiley.innerText = DEAD
+            elSpan.innerText = ''
             gGame.isOn = false
         }
         else {
             gGame.lives--
-            var elSpan = document.querySelector('.lives')
             elSpan.innerText = LIFE.repeat(gGame.lives)
         }
     } else if (gGame.markedCount === gCurrGameLevel.MINES - gStartingLives + gGame.lives) {
